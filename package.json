@@ -1,0 +1,44 @@
+{
+  "name": "humming-preview",
+  "version": "0.0.1",
+  "license": "MIT",
+  "module": "lib/es/index.js",
+  "main": "lib/umd/index.js",
+  "browser": "lib/umd/index.js",
+  "exports": {
+    ".": {
+      "import": "./lib/es/index.js",
+      "require": "./lib/umd/index.js"
+    }
+  },
+  "keywords": [
+    "humming",
+    "图片预览"
+  ],
+  "description": "极简轻量级图片预览插件",
+  "files": [
+    "lib",
+    "src/index.d.ts"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^1.0.1",
+    "svelte": "^3.49.0",
+    "vite": "^3.0.4"
+  },
+  "directories": {
+    "lib": "lib"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/itlangzi/humming.git"
+  },
+  "bugs": {
+    "url": "https://github.com/itlangzi/humming/issues"
+  },
+  "homepage": "https://github.com/itlangzi/humming#readme"
+}

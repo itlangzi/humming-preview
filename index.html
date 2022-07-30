@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" href="/demo/ico.svg" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0" />
+  <title>Humming Image Preview</title>
+  <style>
+    body,
+    html {
+      margin: 0;
+      padding: 0;
+      overflow: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div style="text-align: center; padding: 10px 0;">
+      <img src="/demo/logo.svg" /><br />
+      图片来源于<a href="https://pixabay.com/zh/" title="Pixabay"><strong>https://pixabay.com/zh/</strong></a>请勿用于商业行为
+    </div>
+    <div data-humming>
+      <img src="/demo/1.jpg" />
+      <img src="/demo/2.jpg" />
+      <img src="/demo/3.png" />
+      <img src="/demo/4.jpg" />
+      <img src="/demo/5-x1.png" data-preview="/demo/5-x2.png" />
+    </div>
+    <script type="module" src="/demo/demo.js"></script>
+  </div>
+</body>
+
+</html>
