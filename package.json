@@ -1,6 +1,6 @@
 {
   "name": "humming-preview",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "MIT",
   "module": "lib/es/index.js",
   "main": "lib/umd/index.js",
@@ -35,10 +35,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/itlangzi/humming.git"
+    "url": "git+https://github.com/itlangzi/humming-preview.git"
   },
   "bugs": {
-    "url": "https://github.com/itlangzi/humming/issues"
+    "url": "https://github.com/itlangzi/humming-preview/issues"
   },
-  "homepage": "https://github.com/itlangzi/humming#readme"
+  "homepage": "https://github.com/itlangzi/humming-preview#readme"
 }
