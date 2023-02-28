@@ -3,4 +3,5 @@
 .vscode
 .DS_Store
 *.lock
+lib
 pnpm-lock.yaml

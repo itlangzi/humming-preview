@@ -1,7 +1,8 @@
 {
   "name": "humming-preview",
-  "version": "0.0.2",
+  "version": "0.0.4",
   "license": "MIT",
+  "type": "module",
   "module": "lib/es/index.js",
   "main": "lib/umd/index.js",
   "browser": "lib/umd/index.js",
@@ -26,9 +27,9 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^1.0.1",
-    "svelte": "^3.49.0",
-    "vite": "^3.0.4"
+    "@sveltejs/vite-plugin-svelte": "^2.0.3",
+    "svelte": "^3.55.1",
+    "vite": "^4.1.4"
   },
   "directories": {
     "lib": "lib"
