@@ -3,6 +3,7 @@
   export let name;
 </script>
 
+<!-- svelte-ignore a11y-click-events-have-key-events -->
 <span on:click class="h-preview-icon {name ? 'h-preview-icon-' + name : ''}">
   <svg
     viewBox="0 0 24 24"
