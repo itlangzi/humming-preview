@@ -62,6 +62,11 @@
   // 拖拽结束时间（number）
   let moveEnd = 0;
 
+  // 是否是横屏
+  // 用于手机端
+  let landscape =
+    screen.orientation?.angle === 90 || screen.orientation?.angle === -90;
+
   /**
    * @param {MouseEvent|TouchEvent} event
    */
@@ -90,9 +95,14 @@
    * @param {HTMLImageElement} target
    */
   const setPreviewImage = function (target) {
-    const preview = target.getAttribute("data-preview");
+    let preview = target.getAttribute("data-preview");
+    if (!preview) {
+      // 支持data-src
+      preview = target.getAttribute("data-src");
+    }
     if (preview) {
       if (loaded[preview]) {
+        // 已经加载过
         image = loaded[preview];
       } else {
         const img = new Image();
@@ -153,6 +163,7 @@
         onPrev();
         break;
       case "+":
+        console.log(111111111);
         onZoomIn();
         break;
       case "-":
@@ -336,6 +347,19 @@
         onKeydown(e);
       });
     }
+    if (isMobile) {
+      el.addEventListener("orientationchange", function (e) {
+        if (
+          screen.orientation.angle === 90 ||
+          screen.orientation.angle === -90
+        ) {
+          // 横屏
+          landscape = true;
+        } else {
+          landscape = false;
+        }
+      });
+    }
   };
 
   /**
@@ -474,7 +498,6 @@
       </div>
 
       <div class="h-preview-image" use:moveHandler>
-        <!-- style="transform: translate3d({x}px, {y}px, 0px);" -->
         {#if image}
           <img
             bind:this={ref}
@@ -488,13 +511,17 @@
       </div>
       {#if total > 1}
         <div
-          class={"h-preview-prev" + (index <= 0 ? " h-disabled" : "")}
+          class={"h-preview-prev" +
+            (index <= 0 ? " h-disabled" : "") +
+            (landscape ? " h-preview-prev-landscape" : "")}
           use:stopPropagationHandler={onPrev}
         >
           <ArrowLeft />
         </div>
         <div
-          class={"h-preview-next" + (index >= total - 1 ? " h-disabled" : "")}
+          class={"h-preview-next" +
+            (index >= total - 1 ? " h-disabled" : "") +
+            (landscape ? " h-preview-prev-landscape" : "")}
           use:stopPropagationHandler={onNext}
         >
           <ArrowRight />
@@ -564,9 +591,6 @@
   .h-preview-actions > div.h-disabled {
     color: #ffffff40;
   }
-  .h-preview-actions > div.h-disabled {
-    pointer-events: none;
-  }
   .h-preview-prev.h-disabled,
   .h-preview-next.h-disabled {
     cursor: not-allowed;
@@ -612,7 +636,7 @@
     border-radius: 50%;
     cursor: pointer;
     pointer-events: auto;
-    transition: background 0.3s, color 0.3s;
+    transition: all 0.3s;
     font-size: 1.5rem;
   }
   .h-preview-prev {
@@ -623,6 +647,20 @@
   .h-preview-next:not(.h-disabled):hover {
     background: rgba(0, 0, 0, 0.3);
     color: #fff;
+  }
+
+  .h-preview-prev.h-preview-prev-landscape,
+  .h-preview-next.h-preview-prev-landscape {
+    left: 50%;
+    transform: rotate(90deg);
+  }
+  .h-preview-prev.h-preview-prev-landscape {
+    top: 0.625rem;
+    z-index: 1004;
+  }
+  .h-preview-next.h-preview-prev-landscape {
+    bottom: 0.625rem;
+    top: auto;
   }
   .h-loading {
     z-index: 1002;
