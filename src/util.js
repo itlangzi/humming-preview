@@ -15,7 +15,7 @@ const call = function (fn, self, ...args) {
 /**
  * @param {Function} fn 
  * @param {number} delay 
- * @returns {Function}
+ * @returns {()=>void}
  */
 export const setTimer = function (fn, delay) {
   let timer, canceled = false;
@@ -69,3 +69,33 @@ export const debounce = function (fn, delay = 16) {
 
   return debounced;
 };
+
+
+/**
+ * @typedef FadeParams
+ * @property {number} [delay]
+ * @property {number} [duration] 
+ * @property {(t:number)=>number} [easing] 
+ */
+/**
+ * @typedef TransitionConfig 
+ * @property {number} [delay]
+ * @property {number} [duration]
+ * @property {((t: number)=>number)} [easing]
+ * @property {((t: number, u: number)=>string)} [css]
+ * @property {((t: number, u: number)=>void)} [tick]
+ */
+/**
+ * @param {HTMLElement} node
+ * @param {FadeParams} params
+ * @return {TransitionConfig}  
+ */
+export const fade = function (node, { delay, duration, easing }) {
+  const o = +getComputedStyle(node).opacity;
+  return {
+    delay,
+    duration,
+    easing,
+    css: t => `opacity: ${t * o}`
+  }
+}

@@ -9,7 +9,7 @@
   import Reset from "./icons/reset.svelte";
   import Loading from "./icons/loading.svelte";
 
-  import { debounce, setTimer } from "./util";
+  import { debounce, setTimer, fade } from "./util";
 
   export let selector = null;
 
@@ -25,6 +25,10 @@
   const clickEvent = isMobile ? "touchstart" : "click";
   // const resizeEvent = "resize";
 
+  const translation = 100;
+  const transitionDuration = 300;
+  const previewTransition = { duration: transitionDuration };
+
   // 缓存已经加载的图
   let loaded = {};
   // 加载中
@@ -33,6 +37,8 @@
   let visible = false;
   // 所有的img元素
   let images = null;
+  // 上一个预览的原始img元素
+  let prevPreviewImage = null;
   // 正在预览的原始img元素
   let image = null;
   // 缩放
@@ -108,17 +114,26 @@
         const img = new Image();
         img.src = preview;
         img.alt = target.alt;
-        loading = true;
-        if (target.src) {
-          // fallback
-          image = target;
+        let cancel = setTimer(() => {
+          // 防止抖动
+          loading = true;
+        }, 300);
+
+        if (prevPreviewImage) {
+          image = prevPreviewImage;
         }
+        // if (target.src) {
+        // fallback
+        // image = target;
+        // }
         img.onload = function () {
+          cancel();
           loading = false;
           image = img;
           loaded[preview] = img;
         };
         img.onerror = function () {
+          cancel();
           loading = false;
           if (target.src) {
             image = target;
@@ -163,7 +178,6 @@
         onPrev();
         break;
       case "+":
-        console.log(111111111);
         onZoomIn();
         break;
       case "-":
@@ -174,6 +188,7 @@
   const onClose = function () {
     document.documentElement.style.overflowY = "";
     image = null;
+    prevPreviewImage = null;
     visible = false;
     ref = null;
     onReset();
@@ -232,6 +247,21 @@
     isMoveing = false;
     // setTimer 等待平移完成后获取准确的left值
     const doEnd = () => {
+      if (scale <= 1 && Math.abs(x) > translation) {
+        if (x > 0) {
+          if (index > 0) {
+            prevPreviewImage = image;
+            image = null;
+            onPrev();
+          }
+        } else {
+          if (index < total - 1) {
+            prevPreviewImage = image;
+            image = null;
+            onNext();
+          }
+        }
+      }
       if (ref) {
         let { width, height, left, top } = ref.getBoundingClientRect();
         const { height: clientHeight, width: clientWidth } = getClientSize();
@@ -468,28 +498,22 @@
   <div class="h-preview-root">
     <div class="h-preview" use:closeHandler>
       <div class="h-preview-actions" use:stopPropagationHandler>
-        <div class={loading ? "h-disabled" : ""} use:actionsHandler={onReset}>
+        <div class:h-disabled={loading} use:actionsHandler={onReset}>
           <Reset />
         </div>
-        <div
-          class={loading ? "h-disabled" : ""}
-          use:actionsHandler={onRoateLeft}
-        >
+        <div class:h-disabled={loading} use:actionsHandler={onRoateLeft}>
           <RorateLeft />
         </div>
-        <div
-          class={loading ? "h-disabled" : ""}
-          use:actionsHandler={onRoateRight}
-        >
+        <div class:h-disabled={loading} use:actionsHandler={onRoateRight}>
           <RorateRight />
         </div>
         <div
-          class={loading || scale <= 1 ? "h-disabled" : ""}
+          class:h-disabled={loading || scale <= 1}
           use:actionsHandler={onZoomOut}
         >
           <ZoomOut />
         </div>
-        <div class={loading ? "h-disabled" : ""} use:actionsHandler={onZoomIn}>
+        <div class:h-disabled={loading} use:actionsHandler={onZoomIn}>
           <ZoomIn />
         </div>
         <div use:closeHandler>
@@ -503,6 +527,8 @@
             bind:this={ref}
             src={image.src}
             alt={image.alt}
+            in:fade={previewTransition}
+            out:fade={previewTransition}
             draggable="false"
             style="transform:translate3d({x}px, {y}px, 0px) scale3d({scale}, {scale}, 1) rotate({roate}deg);"
             use:previewHandler
@@ -511,17 +537,17 @@
       </div>
       {#if total > 1}
         <div
-          class={"h-preview-prev" +
-            (index <= 0 ? " h-disabled" : "") +
-            (landscape ? " h-preview-prev-landscape" : "")}
+          class="h-preview-prev"
+          class:h-disabled={index <= 0 || loading}
+          class:h-preview-prev-landscape={landscape}
           use:stopPropagationHandler={onPrev}
         >
           <ArrowLeft />
         </div>
         <div
-          class={"h-preview-next" +
-            (index >= total - 1 ? " h-disabled" : "") +
-            (landscape ? " h-preview-prev-landscape" : "")}
+          class="h-preview-next"
+          class:h-disabled={index >= total - 1 || loading}
+          class:h-preview-next-landscape={landscape}
           use:stopPropagationHandler={onNext}
         >
           <ArrowRight />
@@ -650,7 +676,7 @@
   }
 
   .h-preview-prev.h-preview-prev-landscape,
-  .h-preview-next.h-preview-prev-landscape {
+  .h-preview-next.h-preview-next-landscape {
     left: 50%;
     transform: rotate(90deg);
   }
@@ -658,7 +684,7 @@
     top: 0.625rem;
     z-index: 1004;
   }
-  .h-preview-next.h-preview-prev-landscape {
+  .h-preview-next.h-preview-next-landscape {
     bottom: 0.625rem;
     top: auto;
   }
