@@ -5,3 +5,4 @@
 *.lock
 lib
 pnpm-lock.yaml
+*.lockb

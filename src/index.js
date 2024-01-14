@@ -21,7 +21,7 @@ const selectors = []
 /**
  * @param {string | any[] | NodeListOf<Element>} imgs
  */
-function push(imgs) {
+function detect(imgs) {
   if (imgs && imgs.length) {
     for (let img of imgs) {
       if (selectors.indexOf(img) == -1) {
@@ -31,8 +31,8 @@ function push(imgs) {
   }
 }
 
-push(document.querySelectorAll("[data-humming] img"))
-push(document.querySelectorAll("[data-humming-img]"))
+detect(document.querySelectorAll("[data-humming] img"))
+detect(document.querySelectorAll("[data-humming-img]"))
 
 if (selectors.length) {
   // @ts-ignore

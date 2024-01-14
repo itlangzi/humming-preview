@@ -52,6 +52,9 @@ new Humming([selector, mount])
 ***注意*** 
 1. 若两种方式出现交叉将会自动去重
 2. `开箱即用` 为可选方案
+3. 元素不一定是`img`标签, 非`img`标签需要要设置`data-preview`或`data-src`指向预览的图片地址
+4. 优先级: `data-preview` > `data-src` > `img.src`
+
 
 # 键盘快捷键
 - 上一个：↑
@@ -61,7 +64,7 @@ new Humming([selector, mount])
 - 鼠标滚轮：放大缩小
 
 # 自定义预览
-在待预览的元素上使用属性 `data-preview` 指定预览的图片连接即可，此时待预览的元素可以为非`img`标签
+在非`img`标签设置`data-preview`或`data-src`指向预览的图片地址
 
 # License
 MIT license

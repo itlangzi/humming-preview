@@ -1,4 +1,7 @@
 <script>
+  import { crossfade, fade, scale as scaleAnim } from "svelte/transition";
+  import { onDestroy } from "svelte";
+
   import RorateLeft from "./icons/rotate-left.svelte";
   import RorateRight from "./icons/rotate-right.svelte";
   import ZoomOut from "./icons/zoom-out.svelte";
@@ -9,44 +12,63 @@
   import Reset from "./icons/reset.svelte";
   import Loading from "./icons/loading.svelte";
 
-  import { debounce, setTimer, fade } from "./util";
+  import { debounce, setTimer } from "./util";
 
   export let selector = null;
 
   const isMobile =
     /Mobile|Android|iOS|iPhone|iPad|iPod|Windows Phone|KFAPWI/i.test(
-      navigator.userAgent
+      navigator.userAgent,
     );
 
-  const keydownEvent = isMobile ? "touchstart" : "keydown";
-  const mouseupEvent = isMobile ? "touchend" : "mouseup";
-  const mousedownEvent = isMobile ? "touchstart" : "mousedown";
-  const mousemoveEvent = isMobile ? "touchmove" : "mousemove";
-  const clickEvent = isMobile ? "touchstart" : "click";
+  // const keydownEvent = isMobile ? "touchstart" : "keydown";
+  // const mouseupEvent = isMobile ? "touchend" : "mouseup";
+  // const mousedownEvent = isMobile ? "touchstart" : "mousedown";
+  // const mousemoveEvent = isMobile ? "touchmove" : "mousemove";
+  // const clickEvent = isMobile ? "touchstart" : "click";
   // const resizeEvent = "resize";
 
   const translation = 100;
-  const transitionDuration = 300;
+  const transitionDuration = 500;
+
   const previewTransition = { duration: transitionDuration };
 
-  // 缓存已经加载的图
-  let loaded = {};
+  const [send, receive] = crossfade({
+    duration: 200,
+    fallback: scaleAnim,
+  });
+  const [maskSend, maskReceive] = crossfade({
+    duration: 200,
+    fallback: fade,
+  });
+  // 前后预加载的个数 preloadNum *  2
+  let preloadNum = 3;
   // 加载中
   let loading = false;
+  let loadingIndicator = null;
   // 预览图层显示
   let visible = false;
   // 所有的img元素
+  /** @type {(HTMLElement|HTMLImageElement)[]|null} */
   let images = null;
+  // 预加载中的图片的下标
+  /** @type {number[]} */
+  let preloading = [];
+  // 缓存已经加载的图
+  /** @type {{string?:HTMLImageElement}} */
+  let loaded = {};
   // 上一个预览的原始img元素
-  let prevPreviewImage = null;
+  // let prevPreviewImage = null;
   // 正在预览的原始img元素
-  let image = null;
+  /** @type {?HTMLImageElement} */
+  let previewedImage = null;
+
   // 缩放
   let scale = 1;
   // 旋转
   let roate = 0;
   // 上一个下一个img下标
-  let index = -1;
+  let currentIndex = -1;
   // img元素总数
   let total = 0;
   // 拖拽x坐标
@@ -74,7 +96,7 @@
     screen.orientation?.angle === 90 || screen.orientation?.angle === -90;
 
   /**
-   * @param {MouseEvent|TouchEvent} event
+   * @param {PointerEvent} event
    */
   const offset = (event) => {
     let e = null;
@@ -97,79 +119,168 @@
   };
 
   /**
-   *
-   * @param {HTMLImageElement} target
+   * @param {HTMLElement|HTMLImageElement} el
+   * @returns {Promise}
    */
-  const setPreviewImage = function (target) {
-    let preview = target.getAttribute("data-preview");
+  const load = function (el) {
+    let preview = el.getAttribute("data-preview");
     if (!preview) {
-      // 支持data-src
-      preview = target.getAttribute("data-src");
+      preview = el.getAttribute("data-src");
+    }
+    // @ts-ignore
+    if (!preview && el.src) {
+      // @ts-ignore
+      preview = el.src;
     }
     if (preview) {
       if (loaded[preview]) {
         // 已经加载过
-        image = loaded[preview];
-      } else {
-        const img = new Image();
-        img.src = preview;
-        img.alt = target.alt;
-        let cancel = setTimer(() => {
-          // 防止抖动
-          loading = true;
-        }, 300);
+        return Promise.resolve(loaded[preview]);
+      }
+      const img = new Image();
+      img.src = preview;
+      // @ts-ignore
+      img.alt = el.alt;
 
-        if (prevPreviewImage) {
-          image = prevPreviewImage;
-        }
-        // if (target.src) {
-        // fallback
-        // image = target;
-        // }
+      // 前一个
+      // TODO
+      return new Promise((resolve, reject) => {
         img.onload = function () {
-          cancel();
-          loading = false;
-          image = img;
           loaded[preview] = img;
+          resolve(img);
         };
         img.onerror = function () {
-          cancel();
-          loading = false;
-          if (target.src) {
-            image = target;
-          }
+          reject();
         };
-      }
-    } else {
-      if (target.src) {
-        image = target;
-      }
+      });
+    }
+    return Promise.reject();
+  };
+
+  let preloadingNext = false;
+  /**
+   * 预加载方法
+   */
+  const preloadNext = function () {
+    if (preloadingNext) {
+      return;
+    }
+    if (preloading.length > 0) {
+      preloadingNext = true;
+      // 批量预加载
+      let curPreloadingNextNum = preloadNum * 2;
+      const indexs = preloading.splice(0, curPreloadingNextNum);
+      indexs.forEach((index) => {
+        load(images[index])
+          .then(() => {
+            curPreloadingNextNum--;
+            if (curPreloadingNextNum <= 0) {
+              preloadingNext = false;
+              preloadNext();
+            }
+          })
+          .catch(() => {
+            curPreloadingNextNum--;
+            if (curPreloadingNextNum <= 0) {
+              preloadingNext = false;
+              preloadNext();
+            }
+          });
+      });
     }
   };
 
-  const onImage = debounce(function (
-    /** @type {{target:HTMLImageElement}} */ e
-  ) {
-    document.documentElement.style.overflowY = "hidden";
-    const target = e.target;
-    setPreviewImage(target);
-    index = images.indexOf(image);
-    visible = true;
-  },
-  150);
+  /**
+   * 预加载
+   * @param {number} curIndex
+   */
+  const preload = function (curIndex) {
+    if (preloadNum <= 0 || curIndex < 0 || !images) {
+      return;
+    }
+    const start = Math.max(curIndex - preloadNum, 0);
+    const end = Math.min(start + preloadNum * 2 + 1, images.length || 0);
+    if (end <= 0) {
+      return;
+    }
+    let indexs = Array(end - start)
+      .fill(0)
+      .map((_, i) => i + start);
+
+    const i = indexs.findIndex((i) => i === curIndex);
+    if (i > -1) {
+      indexs.splice(i, 1);
+    }
+
+    // 去重
+    // 按优先级排序并去除已经加载或正在加载的
+    indexs = [
+      ...indexs.slice(i, indexs.length),
+      ...indexs.slice(0, i).reverse(),
+    ].filter((item) => {
+      return preloading.indexOf(item) === -1;
+    });
+    if (indexs.length) {
+      preloading.push(...indexs);
+      preloadNext();
+    }
+  };
 
   /**
-   * @param {KeyboardEvent|TouchEvent} e
+   * @param {number} curIndex
+   */
+  const setPreview = function (curIndex) {
+    if (curIndex < 0) {
+      return;
+    }
+
+    const el = images[curIndex];
+    if (!el) {
+      return;
+    }
+    loadingIndicator = setTimer(() => {
+      // 防止抖动
+      loading = true;
+    }, 200);
+
+    if (preloading.indexOf(curIndex) > -1) {
+      // 删除，使用当前的直接加载
+      preloading.splice(curIndex, 1);
+    }
+
+    preload(curIndex);
+
+    load(el)
+      .then((img) => {
+        // 滚动到视野中
+        el.scrollIntoView();
+        previewedImage = img;
+      })
+      .catch(() => {});
+  };
+
+  const onPreview = debounce(function (
+    /** @type {{target:HTMLImageElement}} */ e,
+  ) {
+    document.documentElement.style.overflowY = "hidden";
+    currentIndex = images.indexOf(e.target);
+    visible = true;
+    setPreview(currentIndex);
+  }, 150);
+
+  /**
+   * @param {KeyboardEvent} e
    */
   const onKeydown = function (e) {
-    if (isMobile || !image) {
+    if (isMobile || !previewedImage) {
       return;
     }
 
     if (e instanceof TouchEvent) {
       return;
     }
-
+    e.stopPropagation();
+    e.preventDefault();
     switch (e.key) {
       case "ArrowRight":
         onNext();
@@ -187,10 +298,14 @@
   };
   const onClose = function () {
     document.documentElement.style.overflowY = "";
-    image = null;
-    prevPreviewImage = null;
+    previewedImage = null;
+    // prevPreviewImage = null;
     visible = false;
     ref = null;
+    loading = false;
+    loadingIndicator && loadingIndicator();
+    loadingIndicator = null;
+    currentIndex = -1;
     onReset();
   };
 
@@ -206,7 +321,7 @@
   };
 
   /**
-   * @param {MouseEvent|TouchEvent} event
+   * @param {PointerEvent} event
    */
   const isImage = function (event) {
     let e = null;
@@ -249,15 +364,15 @@
     const doEnd = () => {
       if (scale <= 1 && Math.abs(x) > translation) {
         if (x > 0) {
-          if (index > 0) {
-            prevPreviewImage = image;
-            image = null;
+          if (currentIndex > 0) {
+            // prevPreviewImage = previewedImage;
+            // previewedImage = null;
             onPrev();
           }
         } else {
-          if (index < total - 1) {
-            prevPreviewImage = image;
-            image = null;
+          if (currentIndex < total - 1) {
+            // prevPreviewImage = previewedImage;
+            // previewedImage = null;
             onNext();
           }
         }
@@ -294,7 +409,7 @@
     moveEnd = 0;
   };
   /**
-   * @param {MouseEvent|TouchEvent} e
+   * @param {PointerEvent} e
    */
   const onStart = function (e) {
     if (isImage(e)) {
@@ -306,7 +421,7 @@
   };
 
   /**
-   * @param {MouseEvent|TouchEvent} e
+   * @param {PointerEvent} e
    */
   const onMove = function (e) {
     if (isMoveing) {
@@ -350,35 +465,75 @@
   };
 
   const onPrev = function () {
-    if (index > 0) {
-      index = index - 1;
-      images[index] && setPreviewImage(images[index]);
+    if (currentIndex > 0) {
+      currentIndex = currentIndex - 1;
+      setPreview(currentIndex);
     }
   };
   const onNext = function () {
-    if (index < total - 1) {
-      index = index + 1;
-      images[index] && setPreviewImage(images[index]);
+    if (currentIndex < total - 1) {
+      currentIndex = currentIndex + 1;
+      setPreview(currentIndex);
     }
   };
 
   /**
    * @param {HTMLElement} el
+   * @param {"pointerdown"|"pointerup"|"pointermove"} eventName
+   * @param {(e?:PointerEvent)=>void} [action]
+   * @returns {import("svelte/action").ActionReturn}
+   */
+  const stopPropagationHandler = (el, eventName, action) => {
+    /**
+     * @param {PointerEvent} e
+     */
+    const onAction = function (e) {
+      if (e.pointerType === "mouse" && e.buttons > 1) {
+        // event.buttons = 1 左键
+        // event.buttons = 0 没有按键
+        // 只响应左键
+        return;
+      }
+      e.stopPropagation();
+      if (typeof action === "function") {
+        action(e);
+      }
+    };
+    el.addEventListener(eventName, onAction);
+    return {
+      destroy() {
+        el.removeEventListener(eventName, onAction);
+      },
+    };
+  };
+
+  /**
+   * @param {HTMLElement} el
+   * @returns {import("svelte/action").ActionReturn}
    */
   const windowHandler = (el) => {
     /* el.addEventListener(resizeEvent, function (e) {
       onResize();
     }); */
-    el.addEventListener(mouseupEvent, function (e) {
-      onEnd();
-    });
+
+    const windowPointerup = stopPropagationHandler(
+      el,
+      "pointerup",
+      function (e) {
+        if (isMoveing) {
+          onEnd();
+        } else if (visible) {
+          onClose();
+        }
+      },
+    );
+
     if (!isMobile) {
-      el.addEventListener(keydownEvent, function (e) {
-        onKeydown(e);
-      });
+      el.addEventListener("keydown", onKeydown);
     }
+    let onOrientationchange = null;
     if (isMobile) {
-      el.addEventListener("orientationchange", function (e) {
+      onOrientationchange = function () {
         if (
           screen.orientation.angle === 90 ||
           screen.orientation.angle === -90
@@ -388,79 +543,84 @@
         } else {
           landscape = false;
         }
-      });
+      };
+      el.addEventListener("orientationchange", onOrientationchange);
     }
+    return {
+      destroy: () => {
+        windowPointerup.destroy();
+        if (!isMobile) {
+          el.removeEventListener("keydown", onKeydown);
+        }
+        if (onOrientationchange) {
+          el.removeEventListener("orientationchange", onOrientationchange);
+        }
+      },
+    };
   };
 
   /**
    * @param {HTMLElement} el
-   */
-  const closeHandler = (el) => {
-    el.addEventListener(clickEvent, function (e) {
-      onClose();
-    });
-  };
-
-  /**
-   * @param {HTMLElement} el
-   * @param {Function} [action]
-   */
-  const stopPropagationHandler = (el, action) => {
-    el.addEventListener(clickEvent, function (e) {
-      e.stopPropagation();
-      if (typeof action === "function") {
-        action();
-      }
-    });
-  };
-
-  /**
-   * @param {HTMLElement} el
-   * @param {Function} action
+   * @param {(e?:PointerEvent)=>void} [action]
+   * @returns {import("svelte/action").ActionReturn}
    */
   const actionsHandler = (el, action) => {
-    el.addEventListener(clickEvent, function (e) {
-      e.preventDefault();
-      e.stopPropagation();
-      action();
-    });
+    const pointerup = stopPropagationHandler(el, "pointerup", action);
+    return {
+      destroy() {
+        pointerup.destroy();
+      },
+    };
   };
 
   /**
    * @param {HTMLElement} el
+   * @returns {import("svelte/action").ActionReturn}
    */
-  const previewHandler = (el) => {
+  const previewdImageHandler = (el) => {
+    let wheelEventOptions = null;
     if (!isMobile) {
-      el.addEventListener(
-        "wheel",
-        function (e) {
-          onWheel(e);
-        },
-        { passive: false }
-      );
+      wheelEventOptions = { passive: false };
+      el.addEventListener("wheel", onWheel, wheelEventOptions);
     }
-    stopPropagationHandler(el);
-    el.addEventListener(mousedownEvent, function (e) {
-      onStart(e);
-    });
-    if (isMobile) {
-      el.addEventListener("touchend", function (e) {
-        onEnd();
-      });
-    }
+    const onFinish = function () {
+      loadingIndicator && loadingIndicator();
+      loading = false;
+    };
+    el.addEventListener("load", onFinish);
+    el.addEventListener("error", onFinish);
+    const pointerdown = stopPropagationHandler(el, "pointerdown", onStart);
+
+    return {
+      destroy() {
+        if (!isMobile) {
+          el.removeEventListener("wheel", onWheel, wheelEventOptions);
+        }
+        el.removeEventListener("load", onFinish);
+        el.removeEventListener("error", onFinish);
+        pointerdown.destroy();
+      },
+    };
   };
 
   /**
    * @param {HTMLElement} el
+   * @returns {import("svelte/action").ActionReturn}
    */
-  const moveHandler = (el) => {
-    el.addEventListener(mousemoveEvent, function (e) {
-      onMove(e);
-    });
+  const previewdMoveHandler = (el) => {
+    const pointermove = stopPropagationHandler(el, "pointermove", onMove);
+    return {
+      destroy() {
+        pointermove.destroy();
+      },
+    };
   };
 
+  /**
+   * @type {import("svelte/action").ActionReturn[]}
+   */
+  let imageActionReturns = [];
   $: {
-    loaded = {};
     total = 0;
     if (!selector) {
       selector = Array.from(document.querySelectorAll("img") || []);
@@ -482,22 +642,38 @@
     }
     if (images && images.length > 0) {
       images.forEach((/** @type {HTMLImageElement} */ img) => {
-        img.addEventListener(clickEvent, onImage);
-        if (isMobile) {
-          img.addEventListener("touchmove", function () {
-            onImage.cancel();
-          });
-        }
+        imageActionReturns.push(
+          stopPropagationHandler(img, "pointerdown", onPreview),
+        );
+        imageActionReturns.push(
+          stopPropagationHandler(img, "pointermove", function (e) {
+            if (e.pointerType === "mouse" && e.buttons !== 1) {
+              return;
+            }
+            onPreview.cancel();
+          }),
+        );
       });
     }
   }
+
+  onDestroy(() => {
+    if (imageActionReturns.length) {
+      imageActionReturns.forEach((item) => item.destroy());
+      imageActionReturns = [];
+    }
+  });
 </script>
 
 <svelte:window use:windowHandler />
 {#if visible}
-  <div class="h-preview-root">
-    <div class="h-preview" use:closeHandler>
-      <div class="h-preview-actions" use:stopPropagationHandler>
+  <div
+    class="h-preview-root"
+    in:maskReceive|global={{ key: "mask" }}
+    out:maskSend|global={{ key: "mask" }}
+  >
+    <div class="h-preview">
+      <div class="h-preview-actions">
         <div class:h-disabled={loading} use:actionsHandler={onReset}>
           <Reset />
         </div>
@@ -516,45 +692,45 @@
         <div class:h-disabled={loading} use:actionsHandler={onZoomIn}>
           <ZoomIn />
         </div>
-        <div use:closeHandler>
+        <div use:actionsHandler={onClose}>
           <Close />
         </div>
       </div>
 
-      <div class="h-preview-image" use:moveHandler>
-        {#if image}
-          <img
-            bind:this={ref}
-            src={image.src}
-            alt={image.alt}
-            in:fade={previewTransition}
-            out:fade={previewTransition}
-            draggable="false"
-            style="transform:translate3d({x}px, {y}px, 0px) scale3d({scale}, {scale}, 1) rotate({roate}deg);"
-            use:previewHandler
-          />
+      <div class="h-preview-image" use:previewdMoveHandler>
+        {#if previewedImage}
+          {#await previewedImage then d}
+            <img
+              bind:this={ref}
+              src={d.src}
+              alt={d.alt}
+              draggable="false"
+              style="transform:translate3d({x}px, {y}px, 0px) scale3d({scale}, {scale}, 1) rotate({roate}deg);"
+              use:previewdImageHandler
+            />
+          {/await}
         {/if}
       </div>
       {#if total > 1}
         <div
           class="h-preview-prev"
-          class:h-disabled={index <= 0 || loading}
+          class:h-disabled={currentIndex <= 0 || loading}
           class:h-preview-prev-landscape={landscape}
-          use:stopPropagationHandler={onPrev}
+          use:actionsHandler={onPrev}
         >
           <ArrowLeft />
         </div>
         <div
           class="h-preview-next"
-          class:h-disabled={index >= total - 1 || loading}
+          class:h-disabled={currentIndex >= total - 1 || loading}
           class:h-preview-next-landscape={landscape}
-          use:stopPropagationHandler={onNext}
+          use:actionsHandler={onNext}
         >
           <ArrowRight />
         </div>
       {/if}
       {#if loading}
-        <div class="h-loading" use:stopPropagationHandler>
+        <div class="h-loading" use:stopPropagationHandler={"pointerup"}>
           <span>
             <Loading />
           </span>
@@ -636,7 +812,7 @@
     align-items: center;
   }
   .h-preview-image > img {
-    position: relative;
+    position: absolute;
     max-width: 100%;
     max-height: 100%;
     vertical-align: middle;

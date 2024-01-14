@@ -20,6 +20,9 @@ export default defineConfig({
   },
   plugins: [
     svelte({
+      compilerOptions: {
+        enableSourcemap: false
+      },
       emitCss: false,
     }),
   ],

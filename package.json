@@ -27,9 +27,9 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^2.0.3",
-    "svelte": "^3.55.1",
-    "vite": "^4.1.4"
+    "@sveltejs/vite-plugin-svelte": "^3.0.1",
+    "svelte": "^4.2.8",
+    "vite": "^5.0.11"
   },
   "directories": {
     "lib": "lib"

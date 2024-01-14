@@ -4,6 +4,7 @@
 </script>
 
 <!-- svelte-ignore a11y-click-events-have-key-events -->
+<!-- svelte-ignore a11y-no-static-element-interactions -->
 <span on:click class="h-preview-icon {name ? 'h-preview-icon-' + name : ''}">
   <svg
     viewBox="0 0 24 24"
