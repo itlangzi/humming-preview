@@ -1,5 +1,5 @@
 <script>
-  import { crossfade, fade, scale as scaleAnim } from "svelte/transition";
+  import { fade } from "svelte/transition";
   import { onDestroy } from "svelte";
 
   import RorateLeft from "./icons/rotate-left.svelte";
@@ -11,6 +11,7 @@
   import ArrowRight from "./icons/arrow-right.svelte";
   import Reset from "./icons/reset.svelte";
   import Loading from "./icons/loading.svelte";
+  import Lightbulb from "./icons/lightbulb.svelte";
 
   import { debounce, setTimer } from "./util";
 
@@ -21,47 +22,21 @@
       navigator.userAgent,
     );
 
-  // const keydownEvent = isMobile ? "touchstart" : "keydown";
-  // const mouseupEvent = isMobile ? "touchend" : "mouseup";
-  // const mousedownEvent = isMobile ? "touchstart" : "mousedown";
-  // const mousemoveEvent = isMobile ? "touchmove" : "mousemove";
-  // const clickEvent = isMobile ? "touchstart" : "click";
-  // const resizeEvent = "resize";
-
   const translation = 100;
-  const transitionDuration = 500;
 
-  const previewTransition = { duration: transitionDuration };
-
-  const [send, receive] = crossfade({
-    duration: 200,
-    fallback: scaleAnim,
-  });
-  const [maskSend, maskReceive] = crossfade({
-    duration: 200,
-    fallback: fade,
-  });
-  // 前后预加载的个数 preloadNum *  2
+  // 总预加载的个数 preloadNum *  2 + 1
   let preloadNum = 3;
   // 加载中
   let loading = false;
-  let loadingIndicator = null;
+  let loadingCancel = null;
   // 预览图层显示
   let visible = false;
   // 所有的img元素
   /** @type {(HTMLElement|HTMLImageElement)[]|null} */
   let images = null;
-  // 预加载中的图片的下标
-  /** @type {number[]} */
-  let preloading = [];
-  // 缓存已经加载的图
-  /** @type {{string?:HTMLImageElement}} */
-  let loaded = {};
-  // 上一个预览的原始img元素
-  // let prevPreviewImage = null;
-  // 正在预览的原始img元素
-  /** @type {?HTMLImageElement} */
-  let previewedImage = null;
+
+  /** @type {({src:string,alt:string})[]} */
+  let previewImages = [];
 
   // 缩放
   let scale = 1;
@@ -82,13 +57,17 @@
   // 是否正在移动(拖拽中)
   let isMoveing = false;
   // 预览元素
-  let ref = null;
+  let ref = [];
+  // let ref2 = null;
   // 取消执行计算函数
   let cancel;
   // 拖拽结束开始执行计算坐标超时时间
   let timeout = 200;
   // 拖拽结束时间（number）
   let moveEnd = 0;
+
+  // 是否开灯
+  let isLight = true;
 
   // 是否是横屏
   // 用于手机端
@@ -119,205 +98,21 @@
   };
 
   /**
-   * @param {HTMLElement|HTMLImageElement} el
-   * @returns {Promise}
+   * @param {number} index
    */
-  const load = function (el) {
-    let preview = el.getAttribute("data-preview");
-    if (!preview) {
-      preview = el.getAttribute("data-src");
-    }
-    // @ts-ignore
-    if (!preview && el.src) {
-      // @ts-ignore
-      preview = el.src;
-    }
-    if (preview) {
-      if (loaded[preview]) {
-        // 已经加载过
-        return Promise.resolve(loaded[preview]);
-      }
-      const img = new Image();
-      img.src = preview;
-      // @ts-ignore
-      img.alt = el.alt;
-
-      // 前一个
-      // TODO
-      return new Promise((resolve, reject) => {
-        img.onload = function () {
-          loaded[preview] = img;
-          resolve(img);
-        };
-        img.onerror = function () {
-          reject();
-        };
-      });
-    }
-    return Promise.reject();
-  };
-
-  let preloadingNext = false;
-  /**
-   * 预加载方法
-   */
-  const preloadNext = function () {
-    if (preloadingNext) {
-      return;
-    }
-    if (preloading.length > 0) {
-      preloadingNext = true;
-      // 批量预加载
-      let curPreloadingNextNum = preloadNum * 2;
-      const indexs = preloading.splice(0, curPreloadingNextNum);
-      indexs.forEach((index) => {
-        load(images[index])
-          .then(() => {
-            curPreloadingNextNum--;
-            if (curPreloadingNextNum <= 0) {
-              preloadingNext = false;
-              preloadNext();
-            }
-          })
-          .catch(() => {
-            curPreloadingNextNum--;
-            if (curPreloadingNextNum <= 0) {
-              preloadingNext = false;
-              preloadNext();
-            }
-          });
-      });
+  const setLoading = (index) => {
+    if (!ref[index]) {
+      // 100 毫秒延迟,防抖
+      loadingCancel = setTimer(() => {
+        loading = true;
+      }, 100);
     }
   };
 
-  /**
-   * 预加载
-   * @param {number} curIndex
-   */
-  const preload = function (curIndex) {
-    if (preloadNum <= 0 || curIndex < 0 || !images) {
-      return;
-    }
-    const start = Math.max(curIndex - preloadNum, 0);
-    const end = Math.min(start + preloadNum * 2 + 1, images.length || 0);
-    if (end <= 0) {
-      return;
-    }
-    let indexs = Array(end - start)
-      .fill(0)
-      .map((_, i) => i + start);
-
-    const i = indexs.findIndex((i) => i === curIndex);
-    if (i > -1) {
-      indexs.splice(i, 1);
-    }
-
-    // 去重
-    // 按优先级排序并去除已经加载或正在加载的
-    indexs = [
-      ...indexs.slice(i, indexs.length),
-      ...indexs.slice(0, i).reverse(),
-    ].filter((item) => {
-      return preloading.indexOf(item) === -1;
-    });
-    if (indexs.length) {
-      preloading.push(...indexs);
-      preloadNext();
-    }
-  };
-
-  /**
-   * @param {number} curIndex
-   */
-  const setPreview = function (curIndex) {
-    if (curIndex < 0) {
-      return;
-    }
-
-    const el = images[curIndex];
-    if (!el) {
-      return;
-    }
-    loadingIndicator = setTimer(() => {
-      // 防止抖动
-      loading = true;
-    }, 200);
-
-    if (preloading.indexOf(curIndex) > -1) {
-      // 删除，使用当前的直接加载
-      preloading.splice(curIndex, 1);
-    }
-
-    preload(curIndex);
-
-    load(el)
-      .then((img) => {
-        // 滚动到视野中
-        el.scrollIntoView();
-        previewedImage = img;
-      })
-      .catch(() => {});
-  };
-
-  const onPreview = debounce(function (
-    /** @type {{target:HTMLImageElement}} */ e,
-  ) {
-    document.documentElement.style.overflowY = "hidden";
-    currentIndex = images.indexOf(e.target);
-    visible = true;
-    setPreview(currentIndex);
-  }, 150);
-
-  /**
-   * @param {KeyboardEvent} e
-   */
-  const onKeydown = function (e) {
-    if (isMobile || !previewedImage) {
-      return;
-    }
-
-    if (e instanceof TouchEvent) {
-      return;
-    }
-    e.stopPropagation();
-    e.preventDefault();
-    switch (e.key) {
-      case "ArrowRight":
-        onNext();
-        break;
-      case "ArrowLeft":
-        onPrev();
-        break;
-      case "+":
-        onZoomIn();
-        break;
-      case "-":
-        onZoomOut();
-        break;
-    }
-  };
-  const onClose = function () {
-    document.documentElement.style.overflowY = "";
-    previewedImage = null;
-    // prevPreviewImage = null;
-    visible = false;
-    ref = null;
+  const calcelLoading = () => {
+    loadingCancel && loadingCancel();
+    loadingCancel = null;
     loading = false;
-    loadingIndicator && loadingIndicator();
-    loadingIndicator = null;
-    currentIndex = -1;
-    onReset();
-  };
-
-  /**
-   * @param {WheelEvent} e
-   */
-  const onWheel = function (e) {
-    if (e.deltaY < 0) {
-      onZoomIn();
-    } else {
-      onZoomOut();
-    }
   };
 
   /**
@@ -355,30 +150,91 @@
     return false;
   };
 
+  const onPreview = debounce(function (
+    /** @type {{target:HTMLImageElement}} */ e,
+  ) {
+    document.documentElement.style.overflowY = "hidden";
+    currentIndex = images.indexOf(e.target);
+    visible = true;
+    setLoading(currentIndex);
+  }, 60);
+
   /**
-   *
+   * @param {KeyboardEvent} e
    */
-  const onEnd = function () {
+  const onKeydown = function (e) {
+    if (isMobile || !previewImages.length) {
+      return;
+    }
+
+    if (e instanceof TouchEvent) {
+      return;
+    }
+    e.stopPropagation();
+    e.preventDefault();
+    switch (e.key) {
+      case "ArrowRight":
+        onNext();
+        break;
+      case "ArrowLeft":
+        onPrev();
+        break;
+      case "+":
+        onZoomIn();
+        break;
+      case "-":
+        onZoomOut();
+        break;
+    }
+  };
+  const onClose = function () {
+    document.documentElement.style.overflowY = "";
+    previewImages = [];
+    visible = false;
+    ref = [];
+    loading = false;
+    calcelLoading();
+    currentIndex = -1;
+    onReset();
+  };
+
+  /**
+   * @param {WheelEvent} e
+   */
+  const onWheel = function (e) {
+    if (e.deltaY < 0) {
+      onZoomIn();
+    } else {
+      onZoomOut();
+    }
+  };
+
+  /**
+   * 移动结束
+   */
+  const onMoveEnd = function () {
     isMoveing = false;
     // setTimer 等待平移完成后获取准确的left值
     const doEnd = () => {
       if (scale <= 1 && Math.abs(x) > translation) {
         if (x > 0) {
           if (currentIndex > 0) {
-            // prevPreviewImage = previewedImage;
-            // previewedImage = null;
             onPrev();
+            x = 0;
+            y = 0;
           }
         } else {
           if (currentIndex < total - 1) {
-            // prevPreviewImage = previewedImage;
-            // previewedImage = null;
             onNext();
+            x = 0;
+            y = 0;
           }
         }
       }
-      if (ref) {
-        let { width, height, left, top } = ref.getBoundingClientRect();
+
+      if (ref[currentIndex]) {
+        let { width, height, left, top } =
+          ref[currentIndex].getBoundingClientRect();
         const { height: clientHeight, width: clientWidth } = getClientSize();
 
         if (width < clientWidth) {
@@ -409,9 +265,10 @@
     moveEnd = 0;
   };
   /**
+   * 开始移动
    * @param {PointerEvent} e
    */
-  const onStart = function (e) {
+  const onMoveStart = function (e) {
     if (isImage(e)) {
       const xy = offset(e);
       oriX = xy.x - x;
@@ -423,13 +280,17 @@
   /**
    * @param {PointerEvent} e
    */
-  const onMove = function (e) {
+  const onMoving = function (e) {
     if (isMoveing) {
       const xy = offset(e);
       x = xy.x - oriX;
       y = xy.y - oriY;
       moveEnd = Date.now();
     }
+  };
+
+  const onLight = function () {
+    isLight = !isLight;
   };
 
   const onReset = function () {
@@ -440,6 +301,7 @@
     oriX = 0;
     oriY = 0;
     isMoveing = false;
+    isLight = true;
   };
   /**
    * 缩小
@@ -467,13 +329,13 @@
   const onPrev = function () {
     if (currentIndex > 0) {
       currentIndex = currentIndex - 1;
-      setPreview(currentIndex);
+      setLoading(currentIndex);
     }
   };
   const onNext = function () {
     if (currentIndex < total - 1) {
       currentIndex = currentIndex + 1;
-      setPreview(currentIndex);
+      setLoading(currentIndex);
     }
   };
 
@@ -481,7 +343,7 @@
    * @param {HTMLElement} el
    * @param {"pointerdown"|"pointerup"|"pointermove"} eventName
    * @param {(e?:PointerEvent)=>void} [action]
-   * @returns {import("svelte/action").ActionReturn}
+   * @returns {?import("svelte/action").ActionReturn}
    */
   const stopPropagationHandler = (el, eventName, action) => {
     /**
@@ -521,10 +383,10 @@
       "pointerup",
       function (e) {
         if (isMoveing) {
-          onEnd();
-        } else if (visible) {
+          onMoveEnd();
+        } /* else if (visible) {
           onClose();
-        }
+        } */
       },
     );
 
@@ -583,21 +445,18 @@
       wheelEventOptions = { passive: false };
       el.addEventListener("wheel", onWheel, wheelEventOptions);
     }
-    const onFinish = function () {
-      loadingIndicator && loadingIndicator();
-      loading = false;
-    };
-    el.addEventListener("load", onFinish);
-    el.addEventListener("error", onFinish);
-    const pointerdown = stopPropagationHandler(el, "pointerdown", onStart);
+
+    el.addEventListener("load", calcelLoading);
+    el.addEventListener("error", calcelLoading);
+    const pointerdown = stopPropagationHandler(el, "pointerdown", onMoveStart);
 
     return {
       destroy() {
         if (!isMobile) {
           el.removeEventListener("wheel", onWheel, wheelEventOptions);
         }
-        el.removeEventListener("load", onFinish);
-        el.removeEventListener("error", onFinish);
+        el.removeEventListener("load", calcelLoading);
+        el.removeEventListener("error", calcelLoading);
         pointerdown.destroy();
       },
     };
@@ -608,7 +467,7 @@
    * @returns {import("svelte/action").ActionReturn}
    */
   const previewdMoveHandler = (el) => {
-    const pointermove = stopPropagationHandler(el, "pointermove", onMove);
+    const pointermove = stopPropagationHandler(el, "pointermove", onMoving);
     return {
       destroy() {
         pointermove.destroy();
@@ -656,6 +515,23 @@
       });
     }
   }
+  $: {
+    if (visible && images.length > 0) {
+      previewImages = images.map((el, index) => {
+        let src = el.getAttribute("data-preview");
+        if (!src) {
+          src = el.getAttribute("data-src");
+        }
+        // @ts-ignore
+        if (!src && el.src) {
+          // @ts-ignore
+          src = el.src;
+        }
+        // @ts-ignore
+        return { src, alt: el.alt };
+      });
+    }
+  }
 
   onDestroy(() => {
     if (imageActionReturns.length) {
@@ -669,47 +545,71 @@
 {#if visible}
   <div
     class="h-preview-root"
-    in:maskReceive|global={{ key: "mask" }}
-    out:maskSend|global={{ key: "mask" }}
+    style="--preview-index: {currentIndex}; --preview-num: {previewImages.length}; --preview-offset: {0};"
+    class:h-light={isLight}
+    in:fade
+    out:fade
   >
     <div class="h-preview">
-      <div class="h-preview-actions">
-        <div class:h-disabled={loading} use:actionsHandler={onReset}>
-          <Reset />
-        </div>
-        <div class:h-disabled={loading} use:actionsHandler={onRoateLeft}>
-          <RorateLeft />
-        </div>
-        <div class:h-disabled={loading} use:actionsHandler={onRoateRight}>
-          <RorateRight />
-        </div>
-        <div
-          class:h-disabled={loading || scale <= 1}
-          use:actionsHandler={onZoomOut}
-        >
-          <ZoomOut />
-        </div>
-        <div class:h-disabled={loading} use:actionsHandler={onZoomIn}>
-          <ZoomIn />
-        </div>
-        <div use:actionsHandler={onClose}>
-          <Close />
+      <div class="h-preview-actions" use:stopPropagationHandler={"pointerup"}>
+        <div class="h-preview-pages">{currentIndex + 1}/{total}</div>
+        <div class="h-preview-icons">
+          <div use:actionsHandler={onLight}>
+            <Lightbulb />
+          </div>
+          <div class:h-disabled={loading} use:actionsHandler={onReset}>
+            <Reset />
+          </div>
+          <div class:h-disabled={loading} use:actionsHandler={onRoateLeft}>
+            <RorateLeft />
+          </div>
+          <div class:h-disabled={loading} use:actionsHandler={onRoateRight}>
+            <RorateRight />
+          </div>
+          <div
+            class:h-disabled={loading || scale <= 1}
+            use:actionsHandler={onZoomOut}
+          >
+            <ZoomOut />
+          </div>
+          <div class:h-disabled={loading} use:actionsHandler={onZoomIn}>
+            <ZoomIn />
+          </div>
+          <div use:actionsHandler={onClose}>
+            <Close />
+          </div>
         </div>
       </div>
-
-      <div class="h-preview-image" use:previewdMoveHandler>
-        {#if previewedImage}
-          {#await previewedImage then d}
-            <img
-              bind:this={ref}
-              src={d.src}
-              alt={d.alt}
-              draggable="false"
-              style="transform:translate3d({x}px, {y}px, 0px) scale3d({scale}, {scale}, 1) rotate({roate}deg);"
-              use:previewdImageHandler
-            />
-          {/await}
-        {/if}
+      <div class="h-preview-sliders-container" use:previewdMoveHandler>
+        <div class="h-preview-sliders">
+          {#if previewImages.length}
+            {#each previewImages as item, index (item.src)}
+              <div
+                class="h-preview-slider"
+                class:h-preview-slider-active={index === currentIndex}
+              >
+                <!-- 只需要对前一个和后一个进行平移(使其产生动画效果)，其他的不用平移 -->
+                <!-- 不使用全局的--preview-offset实时更新会卡顿 -->
+                {#if ref[index] || (index > currentIndex - preloadNum && index < currentIndex + preloadNum)}
+                  <img
+                    bind:this={ref[index]}
+                    src={item.src}
+                    alt={item.alt}
+                    draggable="false"
+                    style="transform:{index === currentIndex
+                      ? `translate3d(${x}px, ${y}px, 0px) scale3d(${scale}, ${scale}, 1) rotate(${roate}deg)`
+                      : (index === currentIndex - 1 ||
+                            index === currentIndex + 1) &&
+                          scale <= 1
+                        ? `translateX(${x}px)`
+                        : ''};"
+                    use:previewdImageHandler
+                  />
+                {/if}
+              </div>
+            {/each}
+          {/if}
+        </div>
       </div>
       {#if total > 1}
         <div
@@ -745,7 +645,13 @@
     box-sizing: border-box;
   }
   .h-preview-root {
-    background-color: #00000073;
+    background-color: rgba(0, 0, 0, 1);
+    --preview-num: 6;
+    --preview-index: 3;
+    --preview-offset: 0;
+  }
+  .h-preview-root.h-light {
+    background-color: rgba(0, 0, 0, 0.5);
   }
   :global(.h-preview-icon) {
     display: flex;
@@ -768,10 +674,10 @@
   }
   .h-preview-actions {
     display: flex;
-    justify-content: flex-end;
+    justify-content: space-between;
     align-items: center;
     width: 100%;
-    color: #ffffffa6;
+    color: rgb(255 255 255 / 60%);
     list-style: none;
     background: rgba(0, 0, 0, 0.4);
     pointer-events: auto;
@@ -784,34 +690,56 @@
     left: 0;
     z-index: 1003;
   }
-  .h-preview-actions > div {
-    padding: 0.75rem;
+  .h-preview-actions .h-preview-icons {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+  }
+  .h-preview-actions .h-preview-pages {
+    font-size: 0.875rem;
+  }
+  .h-preview-actions .h-preview-pages,
+  .h-preview-actions .h-preview-icons > div {
+    padding: 0.75rem 0.5rem;
     cursor: pointer;
   }
   .h-preview-prev.h-disabled,
   .h-preview-next.h-disabled,
-  .h-preview-actions > div.h-disabled {
+  .h-preview-actions div.h-disabled {
     color: #ffffff40;
   }
   .h-preview-prev.h-disabled,
   .h-preview-next.h-disabled {
     cursor: not-allowed;
   }
-  .h-preview-actions > div:not(.h-disabled):hover {
-    color: rgb(255 255 255);
+  .h-preview-sliders-container {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    touch-action: none;
+    user-select: none;
+    align-items: center;
+    display: flex;
+    /* justify-content: center; */
   }
-  .h-preview-image {
+  .h-preview-sliders {
     user-select: none;
     text-align: center;
-    position: absolute;
     inset: 0;
     height: 100vh;
     transition: transform 0.3s cubic-bezier(0.215, 0.61, 0.355, 1);
     display: flex;
     justify-content: center;
     align-items: center;
+    flex: 0 0 auto;
+    touch-action: none;
+    width: calc(100vw * var(--preview-num));
+    transform: translateX(calc(-100vw * var(--preview-index)));
   }
-  .h-preview-image > img {
+
+  .h-preview-sliders .h-preview-slider > * {
     position: absolute;
     max-width: 100%;
     max-height: 100%;
@@ -821,11 +749,24 @@
     transition: transform 0.3s cubic-bezier(0.215, 0.61, 0.355, 1);
     user-select: none;
     pointer-events: auto;
+    touch-action: none;
   }
+  .h-preview-sliders .h-preview-slider {
+    flex: 1 1;
+    /* overflow: hidden; */
+    position: relative;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* .h-preview-sliders .h-preview-slider:not(.h-preview-slider-active) > * {
+    transform: translateX(calc(var(--preview-offset) * 1px));
+  } */
   .h-preview-prev,
   .h-preview-next {
     position: absolute;
-    top: 48%;
+    top: 45%;
     right: 0.625rem;
     z-index: 1;
     display: flex;
@@ -845,13 +786,18 @@
     right: unset;
     left: 0.625rem;
   }
-  .h-preview-prev:not(.h-disabled):hover,
-  .h-preview-next:not(.h-disabled):hover {
-    background: rgba(0, 0, 0, 0.3);
-    color: #fff;
+  @media (any-hover: hover) {
+    .h-preview-actions .h-preview-icons > div:not(.h-disabled):hover {
+      color: rgb(255 255 255 / 90%);
+    }
+    .h-preview-prev:not(.h-disabled):hover,
+    .h-preview-next:not(.h-disabled):hover {
+      background: rgba(0, 0, 0, 0.3);
+      color: #fff;
+    }
   }
 
-  .h-preview-prev.h-preview-prev-landscape,
+  /* .h-preview-prev.h-preview-prev-landscape,
   .h-preview-next.h-preview-next-landscape {
     left: 50%;
     transform: rotate(90deg);
@@ -863,7 +809,7 @@
   .h-preview-next.h-preview-next-landscape {
     bottom: 0.625rem;
     top: auto;
-  }
+  } */
   .h-loading {
     z-index: 1002;
     font-size: 3rem;
