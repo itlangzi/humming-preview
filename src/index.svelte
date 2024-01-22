@@ -502,15 +502,7 @@
     if (images && images.length > 0) {
       images.forEach((/** @type {HTMLImageElement} */ img) => {
         imageActionReturns.push(
-          stopPropagationHandler(img, "pointerdown", onPreview),
-        );
-        imageActionReturns.push(
-          stopPropagationHandler(img, "pointermove", function (e) {
-            if (e.pointerType === "mouse" && e.buttons !== 1) {
-              return;
-            }
-            onPreview.cancel();
-          }),
+          stopPropagationHandler(img, "pointerup", onPreview),
         );
       });
     }
