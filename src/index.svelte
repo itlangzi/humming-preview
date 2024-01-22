@@ -114,6 +114,19 @@
     loadingCancel = null;
     loading = false;
   };
+  /**
+   * @param {number} index
+   */
+  const scrollIntoView = (index) => {
+    const el = images[index];
+    if (el) {
+      el.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+        inline: "center",
+      });
+    }
+  };
 
   /**
    * @param {PointerEvent} event
@@ -330,12 +343,14 @@
     if (currentIndex > 0) {
       currentIndex = currentIndex - 1;
       setLoading(currentIndex);
+      scrollIntoView(currentIndex);
     }
   };
   const onNext = function () {
     if (currentIndex < total - 1) {
       currentIndex = currentIndex + 1;
       setLoading(currentIndex);
+      scrollIntoView(currentIndex);
     }
   };
 
