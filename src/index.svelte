@@ -22,7 +22,7 @@
       navigator.userAgent,
     );
 
-  const translation = 100;
+  const translation = isMobile ? 24 : 100;
 
   // 总预加载的个数 preloadNum *  2 + 1
   let preloadNum = 3;
