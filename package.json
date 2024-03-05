@@ -1,6 +1,6 @@
 {
   "name": "humming-preview",
-  "version": "0.0.11",
+  "version": "0.0.12",
   "license": "MIT",
   "type": "module",
   "module": "lib/es/index.js",
@@ -28,8 +28,8 @@
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^3.0.1",
-    "svelte": "^4.2.8",
-    "vite": "^5.0.11"
+    "svelte": "^4.2.12",
+    "vite": "^5.1.5"
   },
   "directories": {
     "lib": "lib"

@@ -69,6 +69,9 @@
   // 是否开灯
   let isLight = true;
 
+  // 是否正在淡入淡出
+  let isFading = false;
+
   // 是否是横屏
   // 用于手机端
   let landscape =
@@ -197,6 +200,9 @@
         break;
       case "-":
         onZoomOut();
+        break;
+      case "Escape":
+        onClose();
         break;
     }
   };
@@ -399,9 +405,9 @@
       function (e) {
         if (isMoveing) {
           onMoveEnd();
-        } /* else if (visible) {
+        } else if (visible && !isFading) {
           onClose();
-        } */
+        }
       },
     );
 
@@ -490,6 +496,13 @@
     };
   };
 
+  const onIntrostart = () => {
+    isFading = true;
+  };
+  const onIntroend = () => {
+    isFading = false;
+  };
+
   /**
    * @type {import("svelte/action").ActionReturn[]}
    */
@@ -556,6 +569,8 @@
     class:h-light={isLight}
     in:fade
     out:fade
+    on:introstart={onIntrostart}
+    on:introend={onIntroend}
   >
     <div class="h-preview">
       <div class="h-preview-actions" use:stopPropagationHandler={"pointerup"}>
